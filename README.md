@@ -1,82 +1,90 @@
-## Setup & Run
+# StockWiz Folio Management
 
-### 1. Install dependencies
+A FastAPI-based folio management system with PostgreSQL, SQLAlchemy, Alembic migrations, and Celery background tasks.
 
-Install the project dependencies in your virtual environment using the existing `requirements.txt`:
+## Tech Stack
+
+- **Backend:** FastAPI, Python
+- **Database:** PostgreSQL, SQLAlchemy
+- **Migrations:** Alembic
+- **Background Tasks:** Celery, Redis
+- **Testing:** Pytest
+
+## Setup
+
+### 1. Create Virtual Environment
+
+```bash
+python -m venv env
+```
+
+Activate on Windows:
 
 ```powershell
+env\Scripts\Activate
+```
+
+### 2. Install Dependencies
+
+```bash
 pip install -r requirements.txt
 ```
 
-### 2. Configure environment variables
+### 3. Configure Environment
 
-Copy `.env.example` to `.env` and update the PostgreSQL database credentials and Redis configuration.
+Create a `.env` file and configure:
 
-```powershell
-Copy-Item .env.example .env
+```env
+DATABASE_URL=postgresql+psycopg://postgres:root@localhost:5432/folio_db
+REDIS_URL=redis://localhost:6379/0
+CELERY_BROKER_URL=redis://localhost:6379/1
+CELERY_RESULT_BACKEND=redis://localhost:6379/2
 ```
 
-Ensure PostgreSQL and Redis are running before starting the application.
+Update database credentials as needed.
 
-### 3. Start the FastAPI application
+### 4. Run Database Migrations
 
-Run the following command from the project root:
-
-```powershell
-uvicorn app.main:app --reload
-```
-
-Application URLs:
-
-- Frontend: http://127.0.0.1:8000/
-- Swagger API documentation: http://127.0.0.1:8000/docs
-- ReDoc: http://127.0.0.1:8000/redoc
-
-### 4. Start the Celery worker
-
-Open a separate terminal in the project root and run:
-
-```powershell
-celery -A app.workers.celery_app:celery_app worker -Q rebalance --pool=solo --loglevel=info
-```
-
-The Celery worker processes asynchronous stock-rebalancing tasks from the `rebalance` queue. Keep the worker running while testing the rebalance workflow.
-
-## Database Migrations
-
-Apply the existing Alembic migrations:
-
-```powershell
+```bash
 alembic upgrade head
 ```
 
-Generate a migration after modifying database models:
+### 5. Start FastAPI
 
-```powershell
-alembic revision --autogenerate -m "describe your schema change"
+```bash
+uvicorn app.main:app --reload
 ```
 
-Review the generated migration before applying it.
+- API: http://127.0.0.1:8000
+- Swagger Docs: http://127.0.0.1:8000/docs
 
-## Running Tests
+### 6. Start Celery Worker
 
-Run the complete test suite:
+Ensure Redis is running, then open another terminal:
 
-```powershell
-pytest -q
+```bash
+celery -A app.workers.celery_app:celery_app worker -Q rebalance --pool=solo --loglevel=info
 ```
 
-Run an individual test module:
+### 7. Run Tests
 
-```powershell
-pytest tests/test_subscriptions.py -v
+```bash
+pytest
 ```
 
-The test suite covers broker receipts, subscription creation, order quantities, subscription exits, stock replacement, and asynchronous rebalance behavior.
+## Project Structure
 
-## Async Rebalancing Requirements
+```text
+app/
+├── api/          # API endpoints
+├── core/         # Configuration and utilities
+├── db/           # Database and migrations
+├── models/       # SQLAlchemy models
+├── schemas/      # Request and response schemas
+├── services/     # Business logic
+├── workers/      # Celery background tasks
+├── utils/        # Helper functions
+└── main.py       # FastAPI entry point
 
-- PostgreSQL must be available and correctly configured in `.env`.
-- Redis must be running and accessible through the configured Celery broker URL.
-- The FastAPI application and Celery worker must run in separate terminals.
-- The worker must listen to the `rebalance` queue.
+tests/             # Automated tests
+```
