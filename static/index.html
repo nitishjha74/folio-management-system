@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Folio Trading Platform</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+<header>
+  <h1>Folio Trading Platform</h1>
+  <span class="sub">basket subscriptions · multiplier sizing · async rebalancing</span>
+</header>
+
+<main>
+  <!-- ===================== USER: SUBSCRIBE ===================== -->
+  <section class="panel">
+    <h2>Subscribe</h2>
+
+    <label for="userId">User ID</label>
+    <input id="userId" value="user-101" autocomplete="off" />
+
+    <label for="folioSelect">Folio</label>
+    <select id="folioSelect"></select>
+
+    <label for="multiplier">Multiplier (x)</label>
+    <input id="multiplier" type="number" min="1" step="1" value="3" />
+
+    <button id="subscribeBtn">SUBSCRIBE</button>
+    <p class="muted" id="subscribeHint"></p>
+  </section>
+
+  <!-- ===================== USER: ACTIVE ===================== -->
+  <section class="panel">
+    <h2>Active Subscriptions</h2>
+    <ul id="subscriptionList"><li class="muted">Loading…</li></ul>
+  </section>
+
+  <!-- ===================== ADMIN: REBALANCE ===================== -->
+  <section class="panel">
+    <h2>Admin Rebalance</h2>
+
+    <label for="adminFolio">Folio</label>
+    <select id="adminFolio"></select>
+
+    <label for="outgoingTicker">Existing Stock</label>
+    <select id="outgoingTicker"></select>
+
+    <label for="incomingTicker">Replace With</label>
+    <input id="incomingTicker" list="tickerOptions" placeholder="IDEA" autocomplete="off" />
+    <datalist id="tickerOptions"></datalist>
+
+    <label for="incomingQty">New Base Quantity (optional)</label>
+    <input id="incomingQty" type="number" min="1" step="1" placeholder="defaults to outgoing" />
+
+    <button id="rebalanceBtn">TRIGGER REBALANCE</button>
+    <p class="muted" id="rebalanceHint"></p>
+  </section>
+
+  <!-- ===================== ADMIN: JOBS ===================== -->
+  <section class="panel">
+    <h2>Rebalance Jobs</h2>
+    <ul id="jobList"><li class="muted">No jobs yet.</li></ul>
+  </section>
+
+  <!-- ===================== FEED ===================== -->
+  <section class="panel feed-panel">
+    <h2>Live Order Feed</h2>
+    <div class="feed" id="orderFeed"><div class="muted">Waiting for orders…</div></div>
+  </section>
+</main>
+
+<div id="toast"></div>
+<script src="/js/app.js"></script>
+</body>
+</html>
