@@ -1,32 +1,8 @@
-"""Test configuration.
-
-Strategy:
-
-1. ``DATABASE_URL`` and ``CELERY_TASK_ALWAYS_EAGER`` are set **before** any
-   ``app.*`` import. ``app.core.config.get_settings()`` reads the environment
-   once, so this redirects the whole application (including the Celery app)
-   to the test database and eager task execution.
-
-2. Celery runs in eager mode. When ``RebalanceService.trigger`` calls
-   ``rebalance_fanout.apply_async(...)``, the task executes **inline** in the
-   test process — same DB, same transaction semantics, no broker, no worker,
-   no polling. No monkeypatching required.
-
-3. Between tests, every table is truncated with ``RESTART IDENTITY CASCADE``
-   and the seed re-runs. Fast and deterministic. The alternative —
-   transaction rollback — does not work here because services call
-   ``session.commit()`` explicitly.
-
-4. ``TestClient`` is used *without* a context manager so the FastAPI lifespan
-   (which would create+seed on every entry) never runs.
-"""
+"""Test configuration — Postgres, eager Celery, authenticated clients."""
 from __future__ import annotations
 
 import os
 
-# -----------------------------------------------------------------------------
-# MUST run before any `app.*` import.
-# -----------------------------------------------------------------------------
 os.environ.setdefault(
     "DATABASE_URL",
     os.environ.get(
@@ -36,30 +12,42 @@ os.environ.setdefault(
 )
 os.environ["CELERY_TASK_ALWAYS_EAGER"] = "true"
 os.environ.setdefault("LOG_LEVEL", "WARNING")
-# -----------------------------------------------------------------------------
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 
-from app.db.database import Base, engine
+from app.db.database import Base, engine, SessionLocal
 from app.db.seed import seed_folios
 from app.main import app as fastapi_app
-
-# Register every model with Base.metadata before create_all().
 from app import models  # noqa: F401
+from app.models.user import UserRole
+from app.services.auth_service import AuthService
+
+DEFAULT_PASSWORD = "Passw0rd!"
 
 
-# Order matters only for readability — CASCADE handles dependencies.
+# ----------------------------------------------------------------- TestClient
+
+class CSRFTestClient(TestClient):
+    """Auto-attaches the CSRF header from the cookie on unsafe methods."""
+
+    def request(self, method, url, **kwargs):
+        if method.upper() not in ("GET", "HEAD", "OPTIONS"):
+            csrf = self.cookies.get("folio_csrf_token")
+            if csrf:
+                headers = dict(kwargs.get("headers") or {})
+                headers.setdefault("X-CSRF-Token", csrf)
+                kwargs["headers"] = headers
+        return super().request(method, url, **kwargs)
+
+
+# ----------------------------------------------------------------- schema
+
 _TABLES = [
-    "orders",
-    "positions",
-    "rebalance_jobs",
-    "subscriptions",
-    "folio_stocks",
-    "folios",
-    "stocks",
+    "orders", "positions", "rebalance_jobs",
+    "subscriptions", "folio_stocks", "folios", "stocks", "users",
 ]
 
 
@@ -70,11 +58,8 @@ def _reset_schema() -> None:
         )
 
 
-# ---------------------------------------------------------------- schema
-
 @pytest.fixture(scope="session", autouse=True)
 def _create_schema():
-    """Drop + recreate the schema once per test session."""
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     yield
@@ -82,54 +67,105 @@ def _create_schema():
 
 @pytest.fixture(autouse=True)
 def _reset_between_tests(_create_schema):
-    """Clean slate + seeded folios before every test."""
     _reset_schema()
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     with SessionLocal() as db:
         seed_folios(db)
     yield
 
 
-# ---------------------------------------------------------------- client
+# ----------------------------------------------------------------- users
+
+def _create_user(email: str, password: str = DEFAULT_PASSWORD, role: str = UserRole.USER):
+    with SessionLocal() as db:
+        return AuthService().create_user(db, email=email, password=password, role=role)
+
+
+def _login(client: TestClient, email: str, password: str = DEFAULT_PASSWORD) -> dict:
+    r = client.post("/api/auth/login", json={"email": email, "password": password})
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+@pytest.fixture()
+def db_session():
+    with SessionLocal() as db:
+        yield db
+
+
+@pytest.fixture()
+def raw_client():
+    """No authentication — for testing 401/403 behaviour."""
+    return CSRFTestClient(fastapi_app)
+
 
 @pytest.fixture()
 def client():
-    """TestClient bound to the app. No context manager — lifespan is skipped."""
-    return TestClient(fastapi_app)
+    """Authenticated TestClient as a USER."""
+    tc = CSRFTestClient(fastapi_app)
+    _create_user("user-101@test.local", role=UserRole.USER)
+    _login(tc, "user-101@test.local")
+    return tc
 
 
-# ---------------------------------------------------------------- helpers
+@pytest.fixture()
+def admin_client():
+    """Authenticated TestClient as an ADMIN."""
+    tc = CSRFTestClient(fastapi_app)
+    _create_user("admin@test.local", role=UserRole.ADMIN)
+    _login(tc, "admin@test.local")
+    return tc
+
+
+@pytest.fixture()
+def make_client():
+    """Factory: create+login a fresh client with a given email/role."""
+    def _make(email: str, role: str = UserRole.USER, password: str = DEFAULT_PASSWORD):
+        _create_user(email, password=password, role=role)
+        tc = CSRFTestClient(fastapi_app)
+        _login(tc, email, password)
+        return tc
+    return _make
+
+
+# ----------------------------------------------------------------- helpers
+
+@pytest.fixture()
+def current_user_id(client):
+    """Return the authenticated user's user_id."""
+    return client.get("/api/auth/me").json()["user_id"]
+
 
 @pytest.fixture()
 def subscribe(client):
-    """Helper: POST /api/subscriptions and assert 201."""
+    """Helper: subscribe the current user to a folio.
 
-    def _subscribe(
-        user_id: str,
-        folio_id: int = 1,
-        multiplier: int = 1,
-    ) -> dict:
+    The user_id arg is accepted for backward compatibility with the old tests
+    but is ignored — the API derives identity from the JWT.
+    """
+    def _subscribe(user_id: str = "ignored", folio_id: int = 1, multiplier: int = 1):
         r = client.post(
             "/api/subscriptions",
-            json={
-                "user_id": user_id,
-                "folio_id": folio_id,
-                "multiplier": multiplier,
-            },
+            json={"user_id": user_id, "folio_id": folio_id, "multiplier": multiplier},
         )
         assert r.status_code == 201, r.text
         return r.json()
-
     return _subscribe
 
 
 @pytest.fixture()
 def folio_payload(client):
-    """Helper: fetch a folio by id, return its body."""
-
-    def _get(folio_id: int = 1) -> dict:
+    def _get(folio_id: int = 1):
         r = client.get(f"/api/folios/{folio_id}")
         assert r.status_code == 200, r.text
         return r.json()
-
     return _get
+
+
+@pytest.fixture()
+def app_db_session():
+    """A Session bound to the test engine — for direct DB setup in fixtures."""
+    from sqlalchemy.orm import sessionmaker
+    from app.db.database import engine
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    with SessionLocal() as db:
+        yield db

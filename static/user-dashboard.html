@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Stockwiz — My Folios</title>
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="/static/css/dashboard.css" />
+</head>
+<body>
+  <header class="dash-header">
+    <h1>My Folios</h1>
+    <div class="dash-user">
+      <span id="who" class="muted">…</span>
+      <button id="logoutBtn" class="ghost-btn">Sign out</button>
+    </div>
+  </header>
+
+  <main class="dash-main">
+    <section class="panel">
+      <h2>Subscribe to a Folio</h2>
+
+      <div class="form-grid">
+        <div>
+          <label for="folioSelect">Folio</label>
+          <select id="folioSelect"></select>
+        </div>
+        <div>
+          <label for="multiplier">Multiplier (x)</label>
+          <input id="multiplier" type="number" min="1" step="1" value="3" />
+        </div>
+        <div class="form-action">
+          <button id="subscribeBtn" class="primary-btn">Subscribe</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Active Subscriptions</h2>
+      <ul id="subscriptionList" class="list">
+        <li class="muted">Loading…</li>
+      </ul>
+    </section>
+
+    <section class="panel">
+      <h2>Live Order Feed</h2>
+      <ul id="orderFeed" class="list feed">
+        <li class="muted">Loading…</li>
+      </ul>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+  <script>window.__requireRole = "USER";</script>
+  <script src="/static/js/common.js"></script>
+  <script src="/static/js/user-dashboard.js"></script>
+</body>
+</html>

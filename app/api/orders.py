@@ -1,30 +1,29 @@
-"""Execution receipt feed."""
+"""Order feed — scoped to the authenticated user."""
 from __future__ import annotations
 
 from fastapi import APIRouter, Query
 from sqlalchemy import func, select
 
-from app.api.deps import SessionDep
+from app.api.deps import CurrentUser, SessionDep
 from app.models.order import Order
 from app.schemas.order import OrderListOut, OrderOut
 
 router = APIRouter(prefix="/api", tags=["orders"])
 
 
-@router.get("/orders", response_model=OrderListOut, summary="List execution receipts")
+@router.get("/orders", response_model=OrderListOut)
 def list_orders(
+    user: CurrentUser,
     db: SessionDep,
-    user_id: str | None = Query(None),
     folio_id: int | None = Query(None),
     subscription_id: str | None = Query(None),
     ticker: str | None = Query(None),
-    source: str | None = Query(None, description="SUBSCRIPTION | EXIT | REBALANCE"),
+    source: str | None = Query(None),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ) -> OrderListOut:
-    filters = []
-    if user_id:
-        filters.append(Order.user_id == user_id)
+    # Always filtered to the caller — a user cannot see other users' orders.
+    filters = [Order.user_id == user.user_id]
     if folio_id is not None:
         filters.append(Order.folio_id == folio_id)
     if subscription_id:
@@ -47,7 +46,5 @@ def list_orders(
 
     return OrderListOut(
         items=[OrderOut.model_validate(o) for o in orders],
-        total=total,
-        limit=limit,
-        offset=offset,
+        total=total, limit=limit, offset=offset,
     )

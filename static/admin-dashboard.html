@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Stockwiz — Admin</title>
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="/static/css/dashboard.css" />
+</head>
+<body>
+  <header class="dash-header">
+    <h1>Admin Dashboard</h1>
+    <div class="dash-user">
+      <span id="who" class="muted">…</span>
+      <button id="logoutBtn" class="ghost-btn">Sign out</button>
+    </div>
+  </header>
+
+  <main class="dash-main">
+    <section class="panel">
+      <h2>Rebalance a Folio</h2>
+
+      <div class="form-grid">
+        <div>
+          <label for="adminFolio">Folio</label>
+          <select id="adminFolio"></select>
+        </div>
+        <div>
+          <label for="outgoingTicker">Existing Stock</label>
+          <select id="outgoingTicker"></select>
+        </div>
+        <div>
+          <label for="incomingTicker">Replace With</label>
+          <input id="incomingTicker" list="tickerOptions" placeholder="IDEA"
+                 autocomplete="off" />
+          <datalist id="tickerOptions"></datalist>
+        </div>
+        <div>
+          <label for="incomingQty">Base Qty <span class="opt">(optional)</span></label>
+          <input id="incomingQty" type="number" min="1" step="1"
+                 placeholder="defaults to outgoing" />
+        </div>
+        <div class="form-action">
+          <button id="rebalanceBtn" class="primary-btn">Trigger Rebalance</button>
+        </div>
+      </div>
+
+      <p class="muted" id="rebalanceHint"></p>
+    </section>
+
+    <section class="panel">
+      <h2>Recent Rebalance Jobs</h2>
+      <ul id="jobList" class="list">
+        <li class="muted">Loading…</li>
+      </ul>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+  <script>window.__requireRole = "ADMIN";</script>
+  <script src="/static/js/common.js"></script>
+  <script src="/static/js/admin-dashboard.js"></script>
+</body>
+</html>

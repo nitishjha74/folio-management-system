@@ -2,7 +2,7 @@
 
 `AppError` is the base for every expected domain failure. The FastAPI handler
 in `main.py` maps them to `{success, message, data}` responses with the
-correct status code. Unexpected exceptions fall through to a 500 handler.
+correct status code.
 """
 from __future__ import annotations
 
@@ -37,3 +37,17 @@ class ConflictError(AppError):
 
     status_code = 409
     error_code = "conflict"
+
+
+class UnauthorizedError(AppError):
+    """Missing or invalid credentials / token."""
+
+    status_code = 401
+    error_code = "unauthorized"
+
+
+class ForbiddenError(AppError):
+    """Authenticated but not allowed to perform the action."""
+
+    status_code = 403
+    error_code = "forbidden"
